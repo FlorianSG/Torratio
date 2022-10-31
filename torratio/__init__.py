@@ -70,10 +70,11 @@ class HTTPRequestHandler(http.server.BaseHTTPRequestHandler):
 			query["downloaded"] = 0
 
 		if "left" in query:
-			if "left" not in cls.MEMORY[mem_id]:
-				cls.MEMORY[mem_id]["left"] = query["left"]
-			else:
-				query["left"] = cls.MEMORY[mem_id]["left"]
+			if query["left"] != 0:
+				if "left" not in cls.MEMORY[mem_id]:
+					cls.MEMORY[mem_id]["left"] = query["left"]
+				else:
+					query["left"] = cls.MEMORY[mem_id]["left"]
 
 			logging.debug(f"Fake ratio applied, new tracker query:\n{query}")
 
