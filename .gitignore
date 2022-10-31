@@ -9,6 +9,3 @@
 
 # Sublime-text project/workspace
 *.sublime-*
-
-# TEMP
-/system-setup.py
