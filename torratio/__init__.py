@@ -7,6 +7,11 @@ from datetime import datetime
 
 import requests
 
+##
+## To-Do:
+##   - Config File
+##
+
 class DEFAULTS:
 	listen_address = "localhost"
 	listen_port = 8080
