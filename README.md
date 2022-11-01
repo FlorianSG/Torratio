@@ -4,8 +4,6 @@
 
 If you just want to set it up, go to [wiki/Installation][2] for an easy step-by-step guide!
 
-[^1]: **Torratio** works with any BitTorrent compatible client which allow to use an HTTP proxy for peer tracker requests, see [wiki/Setting-Up][6] for more details.
-
 
 ## How does it work ?
 
@@ -91,6 +89,9 @@ This software is licensed under the Open Software License. See [LICENSE.txt][7] 
 Florian SARRAUTE-GILLY <torratio@florian-sg.fr>
 
 On GitHub: <https://github.com/FlorianSG/Torratio>
+
+
+[^1]: **Torratio** works with any BitTorrent compatible client which allow to use an HTTP proxy for peer tracker requests, see [wiki/Setting-Up][3] for more details.
 
 
 [1]: https://wiki.theory.org/BitTorrent_Tracker_Protocol
