@@ -1,8 +1,10 @@
 # Torratio
 
-**Torratio** is an HTTP proxy which automatically fakes upload/download ratio of __any*__ BitTorrent client.
+**Torratio** is an HTTP proxy which automatically fakes upload/download ratio of __any[^1]__ BitTorrent client.
 
 If you just want to set it up, go to [wiki/Installation][2] for an easy step-by-step guide!
+
+[^1]: **Torratio** works with any BitTorrent compatible client which allow to use an HTTP proxy for peer tracker requests, see [wiki/Setting-Up][6] for more details.
 
 
 ## How does it work ?
@@ -51,7 +53,9 @@ You will first need a supported version of **Python 3**, allong with **pip**.
 
 `python -m pip install https://github.com/FlorianSG/Torratio/archive/refs/heads/main.tar.gz`
 
-See [wiki/Installation][2] for more details about installation and setup. 
+See [wiki/Installation][2] for more details about installation.
+See [wiki/Setting-Up][3] to configure your torrent client.
+
 
 ## Usage
 
@@ -59,7 +63,7 @@ See [wiki/Installation][2] for more details about installation and setup.
 
 `torratio -a 127.0.0.1 -p 9092`
 
-See [wiki/Running_Torratio][3] for more details about how to run **Torratio** daemon.
+See [wiki/Running_Torratio][4] for more details about how to run **Torratio** daemon.
 
 
 ### As a Python module
@@ -69,28 +73,30 @@ import torratio
 torratio.daemon(listen_address = "localhost", listen_port = 8090)
 ```
 
-See [wiki/Python_API][4] for more details about the API.
+See [wiki/Python_API][5] for more details about the API.
 
 
 ## Contributing
 
-If you want to improve this software, report a bug, or submit a new feature, go to [wiki/Contributing][5]
+If you want to improve this software, report a bug, or submit a new feature, go to [wiki/Contributing][6]
 
 
 ## License
 
-This software is licensed under the Open Software License. See `LICENSE.txt` for more detail.
+This software is licensed under the Open Software License. See [LICENSE.txt][7] for more detail.
 
 
 ## Author and contact
 
-Florian SARRAUTE-GILLY - [@your_twitter](https://twitter.com/your_username) - email@example.com
+Florian SARRAUTE-GILLY <torratio@florian-sg.fr>
 
-On GitHub: [https://github.com/FlorianSG/Torratio](https://github.com/FlorianSG/Torratio)
+On GitHub: <https://github.com/FlorianSG/Torratio>
 
 
 [1]: https://wiki.theory.org/BitTorrent_Tracker_Protocol
 [2]: https://github.com/FlorianSG/Torratio/wiki/Installation
-[3]: https://github.com/FlorianSG/Torratio/wiki/Daemon
-[4]: https://github.com/FlorianSG/Torratio/wiki/Python_API
-[5]: https://github.com/FlorianSG/Torratio/wiki/Contributing
+[3]: https://github.com/FlorianSG/Torratio/wiki/Setting-Up
+[4]: https://github.com/FlorianSG/Torratio/wiki/Running_Torratio
+[5]: https://github.com/FlorianSG/Torratio/wiki/Python_API
+[6]: https://github.com/FlorianSG/Torratio/wiki/Contributing
+[7]: https://github.com/FlorianSG/Torratio/blob/main/LICENCE.txt
