@@ -5,33 +5,227 @@
 ##   - Config File Args (-c/--config-filename)
 ##
 
+import argparse
+import json
+import logging
+import re
+
+#### FOR DEVEL ONLY
+__DEVEL = True
+if __DEVEL:
+	import os, sys
+	SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+	sys.path.append(os.path.dirname(SCRIPT_DIR))
+
+import torratio
+
+## Pre 3.11 compatibility
+if not hasattr(logging, "getLevelNamesMapping"):
+	logging.getLevelNamesMapping = lambda: {n: l for l, n in logging._levelToName.items()}
+
+
+class Daemon:
+	class Configuration:
+		class Param:
+			def __init__(self, name, target_type, default_value = None, short_flag = None):
+				self.name = name
+				self.target_type = target_type
+				self.default_value = default_value
+				self.short_flag = short_flag
+
+			def __contains__(self, value):
+				return self.is_valid(value)
+
+			def cast(self, raw_value):
+				return self.target_type(raw_value)
+
+			def is_valid(self, value):
+				return True
+
+			def add_argparse_argument(self, parser, **kwargs):
+				flags = [f"--{self.name.replace('_', '-')}"]
+				if self.short_flag is not None:
+					flags.insert(0, self.short_flag)
+
+				return parser.add_argument(*flags, type = self.cast, **kwargs)
+
+		class StrParam(Param):
+			def __init__(self, name, pattern = None, help = None, **kwargs):
+				super().__init__(name, str, **kwargs)
+				self.pattern = pattern
+				self.help = help
+
+			def __iter__(self):
+				if self.help is None:
+					return iter([])
+				elif isinstance(self.help, str):
+					return iter([self.help])
+				else:
+					return iter(self.help)
+
+			def is_valid(self, value):
+				return value == self.default_value or self.pattern is None or bool(re.match(self.pattern, value))
+
+			def add_argparse_argument(self, parser, **kwargs):
+				choices = self if self.pattern is not None else None
+				return super().add_argparse_argument(parser, choices = choices, **kwargs)
+
+		class IntParam(Param):
+			def __init__(self, name, range = None, **kwargs):
+				super().__init__(name, int, **kwargs)
+				self.range = range
+
+			def __iter__(self):
+				return iter((f"{min(self.range)}-{max(self.range)}",))
+
+			def is_valid(self, value):
+				return value == self.default_value or self.range is None or value in self.range
+
+			def add_argparse_argument(self, parser, **kwargs):
+				choices = self if self.range is not None else None
+				return super().add_argparse_argument(parser, choices = choices, **kwargs)
+
+		class MapParam(Param):
+			InvalidCast = object()
+
+			def __init__(self, name, map = None, map_list = None, target_type = None, **kwargs):
+				target_type = target_type or type(kwargs.get("default_value", None))
+				if target_type is None:
+					raise ValueError("At least one of 'target_type' or 'default_value' should be not None")
+				super().__init__(name, target_type, **kwargs)
+				self.map = map or { x: x for x in map_list }
+
+			def __iter__(self):
+				return iter(self.map)
+
+			def cast(self, raw_value):
+				return self.map.get(raw_value, self.InvalidCast)
+
+			def is_valid(self, value):
+				return value == self.default_value or value is not self.InvalidCast
+
+			def add_argparse_argument(self, parser, **kwargs):
+				return super().add_argparse_argument(parser, choices = self, **kwargs)
+
+		_listen_address_patern = r"^(([a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9\-]*[a-zA-Z0-9])\.)*([A-Za-z0-9]|[A-Za-z0-9][A-Za-z0-9\-]*[A-Za-z0-9])$"
+		_log_level_map = { n: l for n, l in logging.getLevelNamesMapping().items() if l > 0 }
+
+		PARAMS = [
+			StrParam("listen_address", short_flag = "-a", default_value = "localhost", pattern = _listen_address_patern, help = ("<ip_addr>", "<hostname>")),
+			IntParam("listen_port", short_flag = "-p", default_value = 8080, range = range(2**16)),
+			MapParam("log_level", short_flag ="-l", default_value = logging.INFO, map = _log_level_map),
+			StrParam("log_filename"),
+			StrParam("log_format", default_value = "[{asctime!s}] [{levelname}] [{name}] {message}"),
+			MapParam("log_format_style", default_value = "{", map_list = "%{$"),
+			StrParam("log_format_datefmt", default_value = "%Y-%m-%dT%H:%M:%S%z"),
+		]
+
+		CLI_ONLY_PARAMS = [
+			StrParam("conf_filename", short_flag = "-c"),
+		]
+
+		FILE_ONLY_PARAMS = []
+
+		@classmethod
+		def get_params(cls, incl_cli = False, incl_file = False, incl_all = False):
+			params = list(cls.PARAMS)
+			if incl_cli or incl_all:
+				params.extend(cls.CLI_ONLY_PARAMS)
+			if incl_file or incl_all:
+				params.extend(cls.FILE_ONLY_PARAMS)
+			return { p.name: p for p in params }
+
+		@classmethod
+		def get_defaults(cls, **kwargs):
+			return { p_name: param.default_value for p_name, param in cls.get_params(**kwargs).items() }
+
+		def __init__(self, cli_args):
+			default_params = self.get_defaults(incl_all = True)
+
+			for param_name, default_value in default_params.items():
+				setattr(self, param_name, default_value)
+
+			for param_name, value in cli_args.items():
+				if param_name in default_params:
+					default_params.pop(param_name)
+					setattr(self, param_name, value)
+
+			if self.conf_filename is not None:
+				try:
+					for param_name, value in self.load_from_file():
+						if param_name in default_params:
+							default_params.pop(param_name)
+							setattr(self, param_name, value)
+				except Exception as e:
+					raise RuntimeError(f"Could not load configuration from '{self.conf_filename}': {e}") from e
+
+		def load_from_file(self):
+			conf_error = []
+			with open(self.conf_filename, "rb") as f:
+				conf = json.load(f)
+				known_params = self.get_params(incl_file = True)
+				for param_name, raw_value in conf.items():
+					if param_name in known_params:
+						value = known_params[param_name].cast(raw_value)
+						if known_params[param_name].is_valid(value):
+							conf[param_name] = value
+						else:
+							conf_error.append(f"Invalid option '{param_name}': {raw_value!r}")
+					else:
+						conf_error.append(f"Unknown option: '{param_name}': {raw_value!r}")
+				if conf_error:
+					raise ValueError(f"Bad configuration file ({'; '.join(conf_error)})")
+				else:
+					return conf.items()
+
+	@classmethod
+	def init(cls, cli_args):
+		logger = logging.getLogger(f"{__name__}.{cls.__qualname__}.init")
+
+		try:
+			conf = cls.Configuration(cli_args)
+		
+		except Exception as e:
+			logger.error(str(e))
+			raise KeyboardInterrupt
+		
+		logging.basicConfig()
+		root_logger = logging.getLogger()
+		root_logger.setLevel(conf.log_level)
+
+		if conf.log_filename is not None:
+			root_logger.addHandler(logging.FileHandler(conf.log_filename))
+
+		log_formatter = logging.Formatter(conf.log_format, style = conf.log_format_style, datefmt = conf.log_format_datefmt)
+		for log_handler in root_logger.handlers:
+			log_handler.setFormatter(log_formatter)
+
+		logger.debug("Config loaded:")
+		for name, value in vars(conf).items():
+			logger.debug(f" * conf.{name}={value!r}")
+		
+		return conf
+
+	@classmethod
+	def main(cls, cli_args):
+		logger = logging.getLogger(f"{__name__}.{cls.__qualname__}.main")
+
+		try:
+			conf = cls.init(cli_args)
+			torratio.daemon(conf.listen_address, conf.listen_port)
+
+		except KeyboardInterrupt:
+			logger.info("Exiting...")
+
+		except Exception as e:
+			logger.exception(f"Exception:")
+
+
 if __name__ == "__main__":
-	import argparse, ipaddress, logging, re
-	import torratio
-
-	class ListenAddr:
-		def __iter__(_):
-			return iter(("<ip-addr-v4>", "<hostname>"))
-		def __contains__(_, address):
-			try:
-				return bool(ipaddress.IPv4Address(address))
-			except ValueError:
-				return bool(re.match(r"^(([a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9\-]*[a-zA-Z0-9])\.)*([A-Za-z0-9]|[A-Za-z0-9][A-Za-z0-9\-]*[A-Za-z0-9])$", address))
-
-	class ListenPort:
-		def __iter__(_):
-			return iter((f"0-{2**16-1}", ))
-		def __contains__(_, port):
-			return port in range(2**16)
-
 	parser = argparse.ArgumentParser()
-	
-	parser.set_defaults(_func = torratio.daemon, _args = (
-		parser.add_argument("-a", "--listen-address", default = torratio.DEFAULTS.listen_address, choices = ListenAddr()).dest,
-		parser.add_argument("-p", "--listen-port", default = torratio.DEFAULTS.listen_port, type = int, choices = ListenPort()).dest,
-		parser.add_argument("--log-level", default = torratio.DEFAULTS.log_level, type = logging._nameToLevel.get, choices = logging._nameToLevel.keys()).dest,
-		parser.add_argument("--log-filename", default = torratio.DEFAULTS.log_filename).dest,
-	))
+	parser.set_defaults(_func = Daemon.main, _args = [
+		param.add_argparse_argument(parser).dest for param in Daemon.Configuration.get_params(incl_cli = True).values()
+	])
 
 	args = parser.parse_args()
-	args._func(**{ k: v for k, v in vars(args).items() if k in args._args })
+	args._func({ k: v for k, v in vars(args).items() if k in args._args and v is not None })

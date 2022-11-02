@@ -1,22 +1,13 @@
+import ipaddress
 import http.server
 import logging
+import re
+import requests
 import socketserver
 import urllib.parse as urllib
+
 from collections import namedtuple, defaultdict
 from datetime import datetime
-
-import requests
-
-##
-## To-Do:
-##   - Config File
-##
-
-class DEFAULTS:
-	listen_address = "localhost"
-	listen_port = 8080
-	log_level = logging.INFO
-	log_filename = None
 
 class TrackerQuery(dict):
 	ValueCaster = namedtuple("ValueCaster", ("load", "dump"))
@@ -69,6 +60,7 @@ class HTTPRequestHandler(http.server.BaseHTTPRequestHandler):
 
 	@classmethod
 	def apply_fake_ratio(cls, query):
+		logger = logging.getLogger(f"{cls.__module__}.{cls.__qualname__}.apply_fake_ratio")
 		mem_id = query["info_hash"].hex()
 
 		if "downloaded" in query:
@@ -81,10 +73,11 @@ class HTTPRequestHandler(http.server.BaseHTTPRequestHandler):
 				else:
 					query["left"] = cls.MEMORY[mem_id]["left"]
 
-			logging.debug(f"Fake ratio applied, new tracker query:\n{query}")
+			logger.debug(f"Fake ratio applied, new tracker query:\n{query}")
 
 	def do_GET(self):
-		logging.info(f"Request: {self.requestline}")
+		logger = logging.getLogger(f"{type(self).__module__}.{type(self).__qualname__}.do_GET")
+		logger.info(f"Request: {self.requestline}")
 
 		try:
 			url = self.path
@@ -93,7 +86,7 @@ class HTTPRequestHandler(http.server.BaseHTTPRequestHandler):
 			if "?" in url:
 				path, query_string = url.split("?")
 				query = TrackerQuery(query_string)
-				logging.debug(f"Traker query:\n{query}")
+				logger.debug(f"Traker query:\n{query}")
 
 				self.apply_fake_ratio(query)
 
@@ -107,32 +100,14 @@ class HTTPRequestHandler(http.server.BaseHTTPRequestHandler):
 			self.wfile.write(response.content)
 
 		except Exception as e:
-			logging.exception(f"Error while processing '{self.path}'")
+			logger.exception(f"Error while processing '{self.path}'")
 
 	def log_request(self, *args):
 		pass
 
-def daemon(
-	listen_address = DEFAULTS.listen_address,
-	listen_port = DEFAULTS.listen_port,
-	log_level = DEFAULTS.log_level,
-	log_filename = DEFAULTS.log_filename
-):
-	log_format = "[%(asctime)s / %(levelname)s] %(message)s"
-	logging.basicConfig(level = log_level, format = log_format)
-	if log_filename is not None:
-		log_file = logging.FileHandler(log_filename)
-		log_file.setLevel(log_level) 
-		log_file.setFormatter(logging.Formatter(log_format))
-		logging.getLogger().addHandler(log_file)
+def daemon(listen_address, listen_port):
+	logger = logging.getLogger(f"{__name__}.daemon")
 
-	try:
-		with socketserver.TCPServer((listen_address, listen_port), HTTPRequestHandler) as http_server:
-			logging.info(f"Listening on {listen_address}:{listen_port}")
-			http_server.serve_forever()
-
-	except KeyboardInterrupt:
-		logging.info("Exiting...")
-
-	except Exception as e:
-		logging.exception("Error")
+	with socketserver.TCPServer((listen_address, listen_port), HTTPRequestHandler) as server:
+		logger.info(f"Listening on {listen_address}:{listen_port}")
+		server.serve_forever()

@@ -44,7 +44,7 @@ The *left* query field is 0 and sent as is.
 
 ## Prerequisites
 
-You will first need a supported version of **Python 3**, allong with **pip**.
+You will first need a supported version of **Python 3** with **pip**.
 
 
 ## Installation
