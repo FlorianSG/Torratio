@@ -1,4 +1,4 @@
-__version__ = "0.1.dev05"
+__version__ = "0.1.dev06"
 
 import http.server
 import inspect
@@ -122,9 +122,9 @@ class HTTPRequestHandler(http.server.BaseHTTPRequestHandler):
 	def process_request(cls, request):
 		logger = logging.getLogger(f"{cls.__module__}.{cls.__qualname__}.{func_name()}")
 
+		logger.debug(f"Tracker request:\n{request.url!r}")
+
 		if request.url.endpoint == "announce":
-			logger.debug(f"Tracker request:\n{request.url!r}")
-			
 			cls.apply_fake_ratio(request)
 
 	@classmethod
