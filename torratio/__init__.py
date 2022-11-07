@@ -1,4 +1,4 @@
-__version__ = "0.1.dev03"
+__version__ = "0.1.dev05"
 
 import http.server
 import inspect
@@ -98,31 +98,32 @@ class TrackerRequest:
 		self.url = self.URL(url)
 		self.headers = dict(headers)
 
-
 class HTTPRequestHandler(http.server.BaseHTTPRequestHandler):
 	MEMORY = defaultdict(dict)
 
 	@classmethod
-	def apply_fake_ratio(cls, query):
+	def apply_fake_ratio(cls, request):
 		logger = logging.getLogger(f"{cls.__module__}.{cls.__qualname__}.{func_name()}")
-		mem_id = query["info_hash"].hex()
+		mem_id = request.url.query.info_hash.hex()
 
-		if "downloaded" in query:
-			query["downloaded"] = 0
+		if "downloaded" in request.url.query:
+			request.url.query.downloaded = 0
 
-		if "left" in query:
-			if query["left"] != 0:
+		if "left" in request.url.query:
+			if request.url.query.left != 0:
 				if "left" not in cls.MEMORY[mem_id]:
-					cls.MEMORY[mem_id]["left"] = query["left"]
+					cls.MEMORY[mem_id]["left"] = request.url.query.left
 				else:
-					query["left"] = cls.MEMORY[mem_id]["left"]
+					request.url.query.left = cls.MEMORY[mem_id]["left"]
 
-			logger.debug(f"Fake ratio applied, new tracker query:\n{query}")
+			logger.debug(f"Fake ratio applied, new tracker request:\n{request.url!r}")
 
 	@classmethod
 	def process_request(cls, request):
 		if request.url.endpoint == "announce":
-			cls.apply_fake_ratio(...)
+			logger.debug(f"Tracker request:\n{request.url!r}")
+			
+			cls.apply_fake_ratio(request)
 
 	@classmethod
 	def process_response(cls, request, response):
