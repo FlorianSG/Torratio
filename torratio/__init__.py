@@ -9,6 +9,8 @@ import urllib.parse as urllib
 from collections import namedtuple, defaultdict
 from datetime import datetime
 
+__version__ = "0.1 (devel_02)"
+
 class TrackerQuery(dict):
 	ValueCaster = namedtuple("ValueCaster", ("load", "dump"))
 	KEY_CAST = {

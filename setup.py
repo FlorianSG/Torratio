@@ -2,13 +2,21 @@
 
 from setuptools import setup
 
+def version():
+	with open("torratio/__init__.py") as f:
+		for line in f.readlines():
+			if line.startswith("__version__"):
+				G = {}
+				exec(line, G)
+				return G["__version__"]
+
 def readme():
 	with open("README.md") as f:
 		return f.read()
 
 setup(
 	name = "torratio",
-	version = "0.1",
+	version = version(),
 	description = "Torrent tracker ratio proxy",
 	long_description = readme(),
 	long_description_content_type = "text/markdown",

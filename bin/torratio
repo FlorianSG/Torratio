@@ -223,6 +223,7 @@ class Daemon:
 
 if __name__ == "__main__":
 	parser = argparse.ArgumentParser()
+	parser.add_argument("--version", action = "version", version = f"%(prog)s {torratio.__version__}")
 	parser.set_defaults(_func = Daemon.main, _args = [
 		param.add_argparse_argument(parser).dest for param in Daemon.Configuration.get_params(incl_cli = True).values()
 	])
