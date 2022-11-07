@@ -1,5 +1,7 @@
-import ipaddress
+__version__ = "0.1.dev03"
+
 import http.server
+import inspect
 import logging
 import re
 import requests
@@ -9,60 +11,100 @@ import urllib.parse as urllib
 from collections import namedtuple, defaultdict
 from datetime import datetime
 
-__version__ = "0.1.dev02"
+def func_name():
+	return inspect.stack()[1].function
 
-class TrackerQuery(dict):
-	ValueCaster = namedtuple("ValueCaster", ("load", "dump"))
-	KEY_CAST = {
-		"info_hash": ValueCaster(urllib.unquote_to_bytes, urllib.quote_from_bytes),
-		"peer_id": ValueCaster(urllib.unquote_plus, urllib.quote_plus),
-		"port": ValueCaster(int, str),
-		"cryptoport": ValueCaster(int, str),
-		"uploaded": ValueCaster(int, str),
-		"downloaded": ValueCaster(int, str),
-		"left": ValueCaster(int, str),
-		"numwant": ValueCaster(int, str),
-		"key": ValueCaster(urllib.unquote_plus, urllib.quote_plus),
-		"compact": ValueCaster(lambda s: bool(int(s)), lambda b: "1" if b else Ellipsis),
-		"supportcrypto": ValueCaster(lambda s: bool(int(s)), lambda b: "1" if b else Ellipsis),
-		"requirecrypto": ValueCaster(lambda s: bool(int(s)), lambda b: "1" if b else Ellipsis),
-		"event": ValueCaster(urllib.unquote_plus, urllib.quote_plus),
-		"ip": ValueCaster(urllib.unquote_plus, urllib.quote_plus),
-		"ipv6": ValueCaster(urllib.unquote_plus, urllib.quote_plus),
-	}
+class TrackerRequest:
+	class URL:
+		class Query(dict):
+			ValueCaster = namedtuple("ValueCaster", ("load", "dump"))
+			KEY_CAST = {
+				"info_hash": ValueCaster(urllib.unquote_to_bytes, urllib.quote_from_bytes),
+				"peer_id": ValueCaster(urllib.unquote_plus, urllib.quote_plus),
+				"port": ValueCaster(int, str),
+				"cryptoport": ValueCaster(int, str),
+				"uploaded": ValueCaster(int, str),
+				"downloaded": ValueCaster(int, str),
+				"left": ValueCaster(int, str),
+				"numwant": ValueCaster(int, str),
+				"key": ValueCaster(urllib.unquote_plus, urllib.quote_plus),
+				"compact": ValueCaster(lambda s: bool(int(s)), lambda b: "1" if b else Ellipsis),
+				"supportcrypto": ValueCaster(lambda s: bool(int(s)), lambda b: "1" if b else Ellipsis),
+				"requirecrypto": ValueCaster(lambda s: bool(int(s)), lambda b: "1" if b else Ellipsis),
+				"event": ValueCaster(urllib.unquote_plus, urllib.quote_plus),
+				"ip": ValueCaster(urllib.unquote_plus, urllib.quote_plus),
+				"ipv6": ValueCaster(urllib.unquote_plus, urllib.quote_plus),
+			}
 
-	def __init__(self, query_string):
-		_dict = {}
-		for item in query_string.split("&"):
-			if "=" in item:
-				key, value_str = item.split("=")
-				value = self.KEY_CAST[key].load(value_str)
-			else:
-				key = item
-				value = None
-			_dict[key] = value
-		super().__init__(_dict)
+			def __init__(self, query_string):
+				_dict = {}
+				for item in query_string.split("&"):
+					if "=" in item:
+						key, value_str = item.split("=")
+						value = self.KEY_CAST[key].load(value_str)
+					else:
+						key = item
+						value = None
+					
+					if key in _dict:
+						if isinstance(_dict[key], list):
+							_dict[key].append(value)
+						else:
+							_dict[key] = [_dict[key], value]
+					else:
+						_dict[key] = value
+				super().__init__(_dict)
 
-	def build(self):
-		query_string_parts = []
-		for key, value in self.items():
-			if value is None:
-				query_string_parts.append(key)
-			else:
-				value_str = self.KEY_CAST[key].dump(value)
-				if value_str is not Ellipsis:
-					query_string_parts.append(f"{key}={value_str}")
-		return "&".join(query_string_parts)
+			def __getattr__(self, key):
+				return self[key]
 
-	def __str__(self):
-		return "".join(f"\t{key}: {value}\n" for key, value in self.items()) + "\n"
+			def __setattr__(self, key, value):
+				self[key] = value
+
+			def __str__(self):
+				query_string_parts = []
+				for key, v in self.items():
+					if isinstance(v, list):
+						values = v
+					else:
+						values = [v]
+
+					for value in values:
+						if value is None:
+							query_string_parts.append(key)
+						else:
+							value_str = self.KEY_CAST[key].dump(value)
+							if value_str is not Ellipsis:
+								query_string_parts.append(f"{key}={value_str}")
+				return "&".join(query_string_parts)
+
+			def __repr__(self):
+				return "".join(f"\t\t{key}: {value!r}\n" for key, value in self.items())
+
+		def __init__(self, url_str):
+			url = urllib.urlparse(url_str)
+			self.server = f"{url.scheme}://{url.netloc}"
+			self.endpoint = url.path.split("/")[-1]
+			self.path = url.path[:-len(self.endpoint)]
+			self.query = self.Query(url.query)
+
+		def __str__(self):
+			return f"{self.server}{self.path}{self.endpoint}?{self.query}"
+
+		def __repr__(self):
+			return f"\tserver: {self.server!r}\n\tpath: {self.path!r}\n\tendpoint: {self.endpoint!r}\n\tquery:\n{self.query!r}"
+
+	def __init__(self, url, headers):
+		self.url = self.URL(url)
+		self.headers = dict(headers)
+
 
 class HTTPRequestHandler(http.server.BaseHTTPRequestHandler):
 	MEMORY = defaultdict(dict)
 
 	@classmethod
 	def apply_fake_ratio(cls, query):
-		logger = logging.getLogger(f"{cls.__module__}.{cls.__qualname__}.apply_fake_ratio")
+		logger = logging.getLogger(f"{cls.__module__}.{cls.__qualname__}.{func_name()}")
 		mem_id = query["info_hash"].hex()
 
 		if "downloaded" in query:
@@ -77,24 +119,28 @@ class HTTPRequestHandler(http.server.BaseHTTPRequestHandler):
 
 			logger.debug(f"Fake ratio applied, new tracker query:\n{query}")
 
+	@classmethod
+	def process_request(cls, request):
+		if request.url.endpoint == "announce":
+			cls.apply_fake_ratio(...)
+
+	@classmethod
+	def process_response(cls, request, response):
+		pass
+
 	def do_GET(self):
-		logger = logging.getLogger(f"{type(self).__module__}.{type(self).__qualname__}.do_GET")
+		logger = logging.getLogger(f"{type(self).__module__}.{type(self).__qualname__}.{func_name()}")
 		logger.info(f"Request: {self.requestline}")
 
 		try:
-			url = self.path
-			headers = dict(self.headers)
+			request = TrackerRequest(self.path, self.headers)
 
-			if "?" in url:
-				path, query_string = url.split("?")
-				query = TrackerQuery(query_string)
-				logger.debug(f"Traker query:\n{query}")
+			self.process_request(request)
 
-				self.apply_fake_ratio(query)
+			response = requests.get(str(request.url), headers = request.headers)
+			
+			self.process_response(request, response)
 
-				url = f"{path}?{query.build()}"
-
-			response = requests.get(url, headers = headers)
 			self.send_response(response.status_code)
 			for k, v in response.headers.items():
 				self.send_header(k, v)
