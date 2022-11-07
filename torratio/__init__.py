@@ -120,6 +120,8 @@ class HTTPRequestHandler(http.server.BaseHTTPRequestHandler):
 
 	@classmethod
 	def process_request(cls, request):
+		logger = logging.getLogger(f"{cls.__module__}.{cls.__qualname__}.{func_name()}")
+
 		if request.url.endpoint == "announce":
 			logger.debug(f"Tracker request:\n{request.url!r}")
 			
@@ -127,6 +129,7 @@ class HTTPRequestHandler(http.server.BaseHTTPRequestHandler):
 
 	@classmethod
 	def process_response(cls, request, response):
+		logger = logging.getLogger(f"{cls.__module__}.{cls.__qualname__}.{func_name()}")
 		pass
 
 	def do_GET(self):
