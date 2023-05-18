@@ -26,6 +26,7 @@ class TrackerRequest:
 				"uploaded": ValueCaster(int, str),
 				"downloaded": ValueCaster(int, str),
 				"left": ValueCaster(int, str),
+				"corrupt": ValueCaster(int, str),
 				"numwant": ValueCaster(int, str),
 				"key": ValueCaster(urllib.unquote_plus, urllib.quote_plus),
 				"compact": ValueCaster(lambda s: bool(int(s)), lambda b: "1" if b else Ellipsis),
