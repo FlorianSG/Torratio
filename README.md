@@ -91,7 +91,7 @@ Florian SARRAUTE-GILLY <torratio@florian-sg.fr>
 On GitHub: <https://github.com/FlorianSG/Torratio>
 
 
-[^1]: **Torratio** works with any BitTorrent compatible client allowing the use of an HTTP proxy for tracker requests. See [wiki/Setting-Up][3] for more details.
+[^1]: **Torratio** works with any BitTorrent compatible client which allow to use an HTTP proxy for peer tracker requests, see [wiki/Setting-Up][3] for more details.
 
 
 [1]: https://wiki.theory.org/BitTorrent_Tracker_Protocol
